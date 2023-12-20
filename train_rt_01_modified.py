@@ -1,5 +1,6 @@
 # docs and experiment results can be found at https://docs.cleanrl.dev/rl-algorithms/ppo/#ppopy
 import argparse
+import math
 import os
 import random
 import time
@@ -163,6 +164,19 @@ class Agent(nn.Module):
         return action, probs.log_prob(action).sum(1), probs.entropy().sum(1), self.critic(x)
 
 
+def WriteServeral(prefix, v_loss, pg_loss, e_loss):
+    name_list = ["v_loss.txt", "pg_loss.txt", "e_loss.txt"]
+    loss_list = [v_loss, pg_loss, e_loss]
+    for i in range(3):
+        folder = os.path.join("props", prefix)
+        if not os.path.exists(folder):
+            os.mkdir(folder)
+        file = os.path.join(folder, name_list[i])
+        with open(file, "a") as f:
+            f.write(str(loss_list[i])+"\n")
+            f.close()
+
+
 
 if __name__ == "__main__":
     args = parse_args()
@@ -218,6 +232,10 @@ if __name__ == "__main__":
     num_updates = args.total_timesteps // args.batch_size
 
     for update in range(1, num_updates + 1):
+
+        # Clock
+        update_start_time = time.time()
+
         # Annealing the rate if instructed to do so.
         print("Update", update, "out of", num_updates+1)
         if args.anneal_lr:
@@ -253,11 +271,11 @@ if __name__ == "__main__":
                 #     writer.add_scalar("charts/episodic_return", item["episode"]["r"], global_step)
                 #     writer.add_scalar("charts/episodic_length", item["episode"]["l"], global_step)
                 #     break
-        print("Have run steps", step)
+        # print("Have run steps", step)
 
         # bootstrap value if not done
         with torch.no_grad():
-            print("Torch no gratitude")
+            # print("Torch no gratitude")
             next_value = agent.get_value(next_obs).reshape(1, -1)
             advantages = torch.zeros_like(rewards).to(device)
             lastgaelam = 0
@@ -349,10 +367,15 @@ if __name__ == "__main__":
         writer.add_scalar("losses/approx_kl", approx_kl.item(), global_step)
         writer.add_scalar("losses/clipfrac", np.mean(clipfracs), global_step)
         writer.add_scalar("losses/explained_variance", explained_var, global_step)
-        print("SPS:", int(global_step / (time.time() - start_time)))
+        # print("SPS:", int(global_step / (time.time() - start_time)))
         writer.add_scalar("charts/SPS", int(global_step / (time.time() - start_time)), global_step)
+        WriteServeral("original_test", v_loss.item(), pg_loss.item(), entropy_loss.item())
 
-        if update==10:
+        # Clock
+        update_end_time = time.time()
+        print("One update completed with time", math.floor(update_end_time-update_start_time), "seconds.")
+
+        if update%100==0:
             path_name = "models"
             file_name = "model_rt_sd_" + str(update) + ".pt"
             save_path = os.path.join(path_name, file_name)
